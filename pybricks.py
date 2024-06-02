@@ -1,7 +1,7 @@
 from micropython import const
 from time import ticks_ms
 import bluetooth
-import struct
+from struct import pack_into, unpack
 
 
 _IRQ_SCAN_RESULT = const(5)
@@ -25,6 +25,10 @@ _ADVERTISING_OBJECT_FLOAT = const(0x04)
 _ADVERTISING_OBJECT_STRING = const(0x05)
 _ADVERTISING_OBJECT_BYTES = const(0x06)
 
+_ADV_MAX_SIZE = const(31)
+_ADV_HEADER_SIZE = const(5)
+_ADV_COPY_FMT = const("31s")
+
 _LEN = const(0)
 _DATA = const(1)
 _TIME = const(2)
@@ -36,15 +40,7 @@ INT_FORMATS = {
     4: "i",
 }
 
-buffer = {}
-
-
-@micropython.viper
-def copy_payload(dest, adv_data, len: int):
-    _dest = ptr8(dest)
-    _src = ptr8(adv_data)
-    for i in range(len):
-        _dest[i] = _src[i + 5]
+observed_data = {}
 
 
 def pybricks_observe_irq(event, data):
@@ -53,7 +49,7 @@ def pybricks_observe_irq(event, data):
 
         # Analyze only advertisements matching Pybricks scheme.
         if (
-            len(adv_data) < 6
+            len(adv_data) <= _ADV_HEADER_SIZE
             or adv_data[1] != _MANUFACTURER_DATA
             or adv_data[2] != _LEGO_ID_LSB
             or adv_data[3] != _LEGO_ID_MSB
@@ -62,9 +58,9 @@ def pybricks_observe_irq(event, data):
 
         # Get channel buffer, if allocated.
         channel = adv_data[4]
-        if channel not in buffer:
+        if channel not in observed_data:
             return
-        info = buffer[channel]
+        info = observed_data[channel]
 
         # Update time interval.
         diff = ticks_ms() - info[_TIME]
@@ -78,8 +74,8 @@ def pybricks_observe_irq(event, data):
         ) // _RSSI_FILTER_WINDOW_MS
 
         # Copy advertising data without allocation.
-        info[_LEN] = len(adv_data) - 5
-        copy_payload(info[_DATA], adv_data, info[_LEN])
+        info[_LEN] = len(adv_data) - _ADV_HEADER_SIZE
+        pack_into(_ADV_COPY_FMT, info[_DATA], 0, adv_data)
 
 
 def get_data_info(info_byte: int):
@@ -101,9 +97,9 @@ def unpack_one(data_type: int, data: memoryview):
         return None
 
     elif data_type == _ADVERTISING_OBJECT_INT and len(data) in INT_FORMATS:
-        return struct.unpack(INT_FORMATS[len(data)], data)[0]
+        return unpack(INT_FORMATS[len(data)], data)[0]
     elif data_type == _ADVERTISING_OBJECT_FLOAT:
-        return struct.unpack("f", data)[0]
+        return unpack("f", data)[0]
     elif data_type == _ADVERTISING_OBJECT_STRING:
         return data.decode("utf-8")
     elif data_type == _ADVERTISING_OBJECT_BYTES:
@@ -118,7 +114,7 @@ def decode(data: memoryview):
     # Case of one value instead of tuple.
     if first_type == _ADVERTISING_OBJECT_SINGLE:
         # Only proceed if this has some data.
-        if len(data) == 1:
+        if len(data) < 2:
             return None
 
         value_type, value_length = get_data_info(data[1])
@@ -145,23 +141,28 @@ def decode(data: memoryview):
 
 class PybricksRadio:
 
-    def __init__(self, broadcast_channel: int = 0, observe_channels=[], start_ble=True):
-        global buffer
-        buffer = {
-            ch: [0, memoryview(bytes(31)), 0, _RSSI_MIN] for ch in observe_channels
+    def __init__(self, broadcast_channel: int = 0, observe_channels=[], ble=None):
+        global observed_data
+        observed_data = {
+            ch: [0, bytearray(_ADV_MAX_SIZE), 0, _RSSI_MIN] for ch in observe_channels
         }
 
-        if start_ble:
+        if ble is None:
+            # BLE not given, so initialize our own instance.
             self.ble = bluetooth.BLE()
             self.ble.active(True)
             self.ble.irq(pybricks_observe_irq)
             self.ble.gap_scan(_DURATION, _INTERVAL_US, _WINDOW_US)
+        else:
+            # Use externally provided BLE, configured and
+            # controlled by user.
+            self.ble = ble
 
     def observe(self, channel: int):
-        if channel not in buffer:
+        if channel not in observed_data:
             return None
 
-        info = buffer[channel]
+        info = observed_data[channel]
 
         if ticks_ms() - info[_TIME] > _OBSERVED_DATA_TIMEOUT_MS:
             info[_RSSI] = _RSSI_MIN
@@ -169,4 +170,5 @@ class PybricksRadio:
         if info[_RSSI] == _RSSI_MIN:
             return None
 
-        return decode(info[_DATA][0 : info[_LEN]])
+        data = memoryview(info[_DATA])
+        return decode(data[_ADV_HEADER_SIZE : info[_LEN] + _ADV_HEADER_SIZE])

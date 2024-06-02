@@ -21,14 +21,14 @@ def your_ble_irq(event, data):
     # Add rest if your BLE handler here.
 
 
-# Allocate the channels but don't start scanning.
-radio = PybricksRadio(observe_channels=[4, 18], start_ble=False)
-
 # Manual control of BLE so you can combine it with other BLE logic.
 ble = bluetooth.BLE()
 ble.active(True)
 ble.irq(your_ble_irq)
 ble.gap_scan(0, 30000, 30000)
+
+# Allocate the channels but don't start scanning.
+radio = PybricksRadio(observe_channels=[4, 18], ble=ble)
 
 
 while True:
