@@ -1,11 +1,12 @@
 # from time import sleep_ms
 # from pybricks import PybricksRadio
 
-# radio = PybricksRadio(observe_channels=[4, 18])
+# radio = PybricksRadio(broadcast_channel=5, observe_channels=[4, 18])
 
 # while True:
-
-#     print(radio.observe(4))
+#     observed = radio.observe(4)
+#     print(observed)
+#     radio.broadcast(["hello, world!", 3.14])
 #     sleep_ms(100)
 
 
@@ -28,9 +29,12 @@ ble.irq(your_ble_irq)
 ble.gap_scan(0, 30000, 30000)
 
 # Allocate the channels but don't start scanning.
-radio = PybricksRadio(observe_channels=[4, 18], ble=ble)
+radio = PybricksRadio(observe_channels=[4, 18], broadcast_channel=5, ble=ble)
 
 
 while True:
-    print(radio.observe(4))
+
+    data = radio.observe(4)
+
+    radio.broadcast(data)
     sleep_ms(100)

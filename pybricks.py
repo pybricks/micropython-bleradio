@@ -56,6 +56,9 @@ def pybricks_observe_irq(event, data):
         ):
             return
 
+        if len(adv_data) - 1 != adv_data[0]:
+            return
+
         # Get channel buffer, if allocated.
         channel = adv_data[4]
         if channel not in observed_data:
@@ -139,6 +142,53 @@ def decode(data: memoryview):
     return unpacked
 
 
+def smallest_format(n):
+    if -(1 << 7) <= n < (1 << 7):
+        return "b", 1
+    elif -(1 << 15) <= n < (1 << 15):
+        return "h", 2
+    else:
+        return "i", 4
+
+
+def get_data_info(info_byte: int):
+    data_type = info_byte >> 5
+    data_length = info_byte & 0x1F
+    return data_type, data_length
+
+
+def encode_one_object(obj, buffer, offset):
+    if isinstance(obj, bool):
+        buffer[offset] = (
+            _ADVERTISING_OBJECT_TRUE if obj else _ADVERTISING_OBJECT_FALSE
+        ) << 5
+        return 1
+
+    if isinstance(obj, int):
+        format, size = smallest_format(obj)
+        buffer[offset] = (_ADVERTISING_OBJECT_INT << 5) + size
+        pack_into(format, buffer, offset + 1, obj)
+        return 1 + size
+
+    if isinstance(obj, float):
+        buffer[offset] = (_ADVERTISING_OBJECT_FLOAT << 5) + 4
+        pack_into("f", buffer, offset + 1, obj)
+        return 1 + 4
+
+    if isinstance(obj, (bytes, bytearray, str)):
+        if isinstance(obj, str):
+            buffer[offset] = _ADVERTISING_OBJECT_STRING << 5
+            data = obj.encode("utf-8")
+        else:
+            buffer[offset] = _ADVERTISING_OBJECT_BYTES << 5
+            data = obj
+        buffer[offset] += len(data)
+        pack_into(str(len(data)) + "s", buffer, offset + 1, data)
+        return 1 + len(data)
+
+    raise ValueError("Data type not supported")
+
+
 class PybricksRadio:
 
     def __init__(self, broadcast_channel: int = 0, observe_channels=[], ble=None):
@@ -146,6 +196,9 @@ class PybricksRadio:
         observed_data = {
             ch: [0, bytearray(_ADV_MAX_SIZE), 0, _RSSI_MIN] for ch in observe_channels
         }
+
+        self.broadcast_channel = broadcast_channel
+        self.send_buffer = memoryview(bytearray(_ADV_MAX_SIZE))
 
         if ble is None:
             # BLE not given, so initialize our own instance.
@@ -172,3 +225,28 @@ class PybricksRadio:
 
         data = memoryview(info[_DATA])
         return decode(data[_ADV_HEADER_SIZE : info[_LEN] + _ADV_HEADER_SIZE])
+
+    def broadcast(self, data):
+
+        if data is None:
+            self.ble.gap_advertise(None)
+            return
+
+        send_buffer = self.send_buffer
+
+        size = _ADV_HEADER_SIZE
+
+        if isinstance(data, (int, float, bool, str, bytes, bytearray)):
+            send_buffer[_ADV_HEADER_SIZE] = _ADVERTISING_OBJECT_SINGLE
+            size += 1 + encode_one_object(data, send_buffer, _ADV_HEADER_SIZE + 1)
+        else:
+            for value in data:
+                size += encode_one_object(value, send_buffer, size)
+
+        send_buffer[0] = size - 1
+        send_buffer[1] = _MANUFACTURER_DATA
+        send_buffer[2] = _LEGO_ID_LSB
+        send_buffer[3] = _LEGO_ID_MSB
+        send_buffer[4] = self.broadcast_channel
+
+        self.ble.gap_advertise(40000, send_buffer[0:size])
