@@ -197,7 +197,18 @@ def encode_one_object(obj, buffer, offset):
 
 class BLERadio:
 
-    def __init__(self, broadcast_channel: int = 0, observe_channels=[], ble=None):
+    def __init__(self, broadcast_channel: int = None, observe_channels=[], ble=None):
+
+        for channel in observe_channels:
+            if not isinstance(channel, int) or 0 < channel > 255:
+                raise ValueError(
+                    "Observe channel must be list of integers from 0 to 255."
+                )
+        if broadcast_channel is not None and (
+            not isinstance(channel, int) or 0 < broadcast_channel > 255
+        ):
+            raise ValueError("Broadcast channel must be None or integer from 0 to 255.")
+
         global observed_data
         observed_data = {
             ch: [0, bytearray(_ADV_MAX_SIZE), 0, _RSSI_MIN] for ch in observe_channels
@@ -219,7 +230,7 @@ class BLERadio:
 
     def observe(self, channel: int):
         if channel not in observed_data:
-            return None
+            raise ValueError("Channel not allocated.")
 
         info = observed_data[channel]
 
@@ -232,7 +243,21 @@ class BLERadio:
         data = memoryview(info[_DATA])
         return decode(data[_ADV_HEADER_SIZE : info[_LEN] + _ADV_HEADER_SIZE])
 
+    def signal_strength(self, channel: int):
+        if channel not in observed_data:
+            raise ValueError("Channel not allocated.")
+
+        info = observed_data[channel]
+
+        if ticks_ms() - info[_TIME] > _OBSERVED_DATA_TIMEOUT_MS:
+            info[_RSSI] = _RSSI_MIN
+
+        return info[_RSSI]
+
     def broadcast(self, data):
+
+        if self.broadcast_channel is None:
+            raise RuntimeError("Broadcast channel not configured.")
 
         if data is None:
             self.ble.gap_advertise(None)
