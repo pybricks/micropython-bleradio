@@ -4,7 +4,7 @@
         {
             "label": "Run with mpremote",
             "type": "shell",
-            "command": "mpremote cp pybricks.py :pybricks.py + run main.py",
+            "command": "mpremote cp bleradio.py :lib/bleradio.py + run ${file}",
             "group": {
                 "kind": "build",
                 "isDefault": true

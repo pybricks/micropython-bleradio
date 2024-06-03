@@ -43,7 +43,7 @@ INT_FORMATS = {
 observed_data = {}
 
 
-def pybricks_observe_irq(event, data):
+def observe_irq(event, data):
     if event == _IRQ_SCAN_RESULT:
         addr_type, addr, adv_type, rssi, adv_data = data
 
@@ -189,7 +189,7 @@ def encode_one_object(obj, buffer, offset):
     raise ValueError("Data type not supported")
 
 
-class PybricksRadio:
+class BLERadio:
 
     def __init__(self, broadcast_channel: int = 0, observe_channels=[], ble=None):
         global observed_data
@@ -204,7 +204,7 @@ class PybricksRadio:
             # BLE not given, so initialize our own instance.
             self.ble = bluetooth.BLE()
             self.ble.active(True)
-            self.ble.irq(pybricks_observe_irq)
+            self.ble.irq(observe_irq)
             self.ble.gap_scan(_DURATION, _INTERVAL_US, _WINDOW_US)
         else:
             # Use externally provided BLE, configured and
