@@ -100,21 +100,20 @@ while True:
 ```python
 from bleradio import BLERadio
 
-radio = BLERadio(observe_channels=[4])
+radio = BLERadio(observe_channels=[5])
 
 old_data = None
 
 while True:
 
-    new_data = radio.observe(4)
-    strength = radio.signal_strength(4)
+    new_data = radio.observe(5)
+    strength = radio.signal_strength(5)
 
     if new_data == old_data:
         continue
 
     print(strength, "dBm:", new_data)
     old_data = new_data
-
 ```
 
 ## Mixing it with other BLE code
