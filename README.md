@@ -62,7 +62,7 @@ Copy [bleradio.py](https://raw.githubusercontent.com/pybricks/micropython-blerad
 Or use the `mpremote` tool to install it directly from GitHub:
 
 ```
-mpremote mip install https://github.com/pybricks/micropython-bleradio/blob/master/bleradio.py
+mpremote mip install https://raw.githubusercontent.com/pybricks/micropython-bleradio/master/bleradio.py
 ```
 
 ## Example (run this one one board...)
