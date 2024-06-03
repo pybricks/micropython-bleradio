@@ -7,9 +7,13 @@ import bluetooth
 
 def your_ble_irq(event, data):
     # Processes advertising data matching Pybricks scheme, if any.
-    observe_irq(event, data)
+    channel = observe_irq(event, data)
+    if channel is not None:
+        # Something was observed on this channel. You could handle this
+        # event further here if you like.
+        pass
 
-    # Add rest of your BLE handler here.
+    # Add rest of your conventional BLE handler here.
 
 
 # Manual control of BLE so you can combine it with other BLE logic.

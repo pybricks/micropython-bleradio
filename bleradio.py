@@ -44,41 +44,47 @@ observed_data = {}
 
 
 def observe_irq(event, data):
-    if event == _IRQ_SCAN_RESULT:
-        addr_type, addr, adv_type, rssi, adv_data = data
+    if event != _IRQ_SCAN_RESULT:
+        return
 
-        # Analyze only advertisements matching Pybricks scheme.
-        if (
-            len(adv_data) <= _ADV_HEADER_SIZE
-            or adv_data[1] != _MANUFACTURER_DATA
-            or adv_data[2] != _LEGO_ID_LSB
-            or adv_data[3] != _LEGO_ID_MSB
-        ):
-            return
+    addr_type, addr, adv_type, rssi, adv_data = data
 
-        if len(adv_data) - 1 != adv_data[0]:
-            return
+    # Analyze only advertisements matching Pybricks scheme.
+    if (
+        len(adv_data) <= _ADV_HEADER_SIZE
+        or adv_data[1] != _MANUFACTURER_DATA
+        or adv_data[2] != _LEGO_ID_LSB
+        or adv_data[3] != _LEGO_ID_MSB
+    ):
+        return
 
-        # Get channel buffer, if allocated.
-        channel = adv_data[4]
-        if channel not in observed_data:
-            return
-        info = observed_data[channel]
+    if len(adv_data) - 1 != adv_data[0]:
+        return
 
-        # Update time interval.
-        diff = ticks_ms() - info[_TIME]
-        info[_TIME] += diff
-        if diff > _RSSI_FILTER_WINDOW_MS:
-            diff = _RSSI_FILTER_WINDOW_MS
+    # Get channel buffer, if allocated.
+    channel = adv_data[4]
+    if channel not in observed_data:
+        return
+    info = observed_data[channel]
 
-        # Approximate a slow moving average to make RSSI more stable.
-        info[_RSSI] = (
-            info[_RSSI] * (_RSSI_FILTER_WINDOW_MS - diff) + rssi * diff
-        ) // _RSSI_FILTER_WINDOW_MS
+    # Update time interval.
+    diff = ticks_ms() - info[_TIME]
+    info[_TIME] += diff
+    if diff > _RSSI_FILTER_WINDOW_MS:
+        diff = _RSSI_FILTER_WINDOW_MS
 
-        # Copy advertising data without allocation.
-        info[_LEN] = len(adv_data) - _ADV_HEADER_SIZE
-        pack_into(_ADV_COPY_FMT, info[_DATA], 0, adv_data)
+    # Approximate a slow moving average to make RSSI more stable.
+    info[_RSSI] = (
+        info[_RSSI] * (_RSSI_FILTER_WINDOW_MS - diff) + rssi * diff
+    ) // _RSSI_FILTER_WINDOW_MS
+
+    # Copy advertising data without allocation.
+    info[_LEN] = len(adv_data) - _ADV_HEADER_SIZE
+    pack_into(_ADV_COPY_FMT, info[_DATA], 0, adv_data)
+
+    # Allow handler to run other callback code on successfully
+    # receiving a broadcasted message.
+    return channel
 
 
 def get_data_info(info_byte: int):
@@ -104,7 +110,7 @@ def unpack_one(data_type: int, data: memoryview):
     elif data_type == _ADVERTISING_OBJECT_FLOAT:
         return unpack("f", data)[0]
     elif data_type == _ADVERTISING_OBJECT_STRING:
-        return data.decode("utf-8")
+        return bytes(data).decode("utf-8")
     elif data_type == _ADVERTISING_OBJECT_BYTES:
         return data
     else:

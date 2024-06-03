@@ -10,6 +10,8 @@ radio = BLERadio(broadcast_channel=5, observe_channels=[4, 18])
 # You can run a variant of this script on another board, and have it broadcast
 # on channel 4 or 18, for example. This board will then receive it.
 
+counter = 0
+
 while True:
 
     # Data observed on channel 4, as broadcast by another board.
@@ -18,5 +20,6 @@ while True:
     print(observed)
 
     # Broadcast some data on our channel, which is 5.
-    radio.broadcast(["hello, world!", 3.14])
+    radio.broadcast(["hello, world!", 3.14, counter])
+    counter += 1
     sleep_ms(100)
