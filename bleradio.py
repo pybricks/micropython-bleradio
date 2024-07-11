@@ -205,7 +205,7 @@ class BLERadio:
                     "Observe channel must be list of integers from 0 to 255."
                 )
         if broadcast_channel is not None and (
-            not isinstance(channel, int) or 0 < broadcast_channel > 255
+            not isinstance(broadcast_channel, int) or 0 < broadcast_channel > 255
         ):
             raise ValueError("Broadcast channel must be None or integer from 0 to 255.")
 
